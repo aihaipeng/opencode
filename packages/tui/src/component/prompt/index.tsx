@@ -26,6 +26,7 @@ import { editorSelectionKey, useEditorContext, type EditorSelection } from "../.
 import { normalizePromptContent, openEditor } from "../../editor"
 import { useExit } from "../../context/exit"
 import { promptOffsetWidth } from "../../prompt/display"
+import { promptMetadataPolicy } from "../../prompt/metadata"
 import { expandPromptInputPastedText, realignPromptInputMentions } from "../../prompt/mention"
 import { parseSlashHead } from "../../prompt/parse"
 import { stringWidth } from "../../util/string-width"
@@ -1591,6 +1592,17 @@ export function Prompt(props: PromptProps) {
     () => !!promptDisplay().agentLabel && store.mode === "normal" && !!promptDisplay().variant,
     metadataAnimationsEnabled,
   )
+  const [metadataWidth, setMetadataWidth] = createSignal(dimensions().width)
+  const metadata = createMemo(() =>
+    promptMetadataPolicy({
+      width: metadataWidth(),
+      agent: agentLabel() ?? "",
+      auto: local.permission.mode === "auto",
+      model: promptDisplay().modelLabel,
+      provider: promptDisplay().providerLabel,
+      variant: promptDisplay().variant,
+    }),
+  )
   createEffect(() => {
     if (agentLabel()) revealedPromptMetadata.add(local)
   })
@@ -1838,17 +1850,25 @@ export function Prompt(props: PromptProps) {
               syntaxStyle={syntax()}
             />
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1} justifyContent="space-between">
-              <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} minWidth={0}>
+              <box
+                flexDirection="row"
+                gap={1}
+                flexGrow={1}
+                flexShrink={1}
+                minWidth={0}
+                onSizeChange={function (this: BoxRenderable) {
+                  const width = this.width
+                  queueMicrotask(() => setMetadataWidth(width))
+                }}
+              >
                 <Show when={agentLabel()} fallback={<box height={1} />}>
                   {(label) => (
                     <>
                       <text fg={fadeColor(highlight(), agentMetaAlpha())}>{label()}</text>
-                      <Show
-                        when={store.mode === "normal" && local.permission.mode === "auto" && dimensions().width >= 44}
-                      >
+                      <Show when={store.mode === "normal" && metadata().auto}>
                         <text fg={fadeColor(theme.text.subdued, agentMetaAlpha())}>auto</text>
                       </Show>
-                      <Show when={store.mode === "normal" && dimensions().width >= 28}>
+                      <Show when={store.mode === "normal" && metadata().model}>
                         <box flexDirection="row" gap={1} flexGrow={1} flexShrink={1} minWidth={0}>
                           <text fg={fadeColor(theme.text.subdued, modelMetaAlpha())}>·</text>
                           <text
@@ -1858,14 +1878,14 @@ export function Prompt(props: PromptProps) {
                             truncate
                             fg={fadeColor(muted() ? theme.text.subdued : theme.text.default, modelMetaAlpha())}
                           >
-                            {promptDisplay().modelLabel}
+                            {metadata().model}
                           </text>
-                          <Show when={dimensions().width >= 50}>
+                          <Show when={metadata().provider}>
                             <text flexShrink={0} fg={fadeColor(theme.text.subdued, modelMetaAlpha())}>
-                              {promptDisplay().providerLabel}
+                              {metadata().provider}
                             </text>
                           </Show>
-                          <Show when={promptDisplay().variant && dimensions().width >= 70}>
+                          <Show when={metadata().variant}>
                             <text fg={fadeColor(theme.text.subdued, variantMetaAlpha())}>·</text>
                             <text>
                               <span
@@ -1874,7 +1894,7 @@ export function Prompt(props: PromptProps) {
                                   bold: true,
                                 }}
                               >
-                                {promptDisplay().variant}
+                                {metadata().variant}
                               </span>
                             </text>
                           </Show>
